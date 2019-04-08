@@ -508,17 +508,16 @@ module Base = struct
     in
     ()
 
-  let reduced_main = lazy main
+  let prove_main = Groth16.reduce_to_prover (tick_input ()) main
 
   let create_keys () = Groth16.generate_keypair main ~exposing:(tick_input ())
 
-  let transaction_union_proof ?(preeval = true) ~proving_key sok_digest state1
-      state2 pending_coinbase_stack_state (transaction : Transaction_union.t)
-      handler =
+  let transaction_union_proof ~proving_key sok_digest state1 state2
+      pending_coinbase_stack_state (transaction : Transaction_union.t) handler
+      =
     let prover_state : Prover_state.t =
       {state1; state2; transaction; sok_digest; pending_coinbase_stack_state}
     in
-    let main = if preeval then Lazy.force reduced_main else main in
     let main top_hash = handle (main top_hash) handler in
     let top_hash =
       base_top_hash ~sok_digest ~state1 ~state2
@@ -811,6 +810,8 @@ module Merge = struct
     in
     Boolean.Assert.all [verify_12; verify_23]
 
+  let prove_main = Groth16.reduce_to_prover (input ()) main
+
   let create_keys () = Groth16.generate_keypair ~exposing:(input ()) main
 
   let cached =
@@ -1059,6 +1060,8 @@ struct
     in
     with_label __LOC__ (Boolean.Assert.is_true result)
 
+  let prove_main = reduce_to_prover wrap_input main
+
   let create_keys () = generate_keypair ~exposing:wrap_input main
 
   let cached =
@@ -1084,8 +1087,7 @@ module type S = sig
   include Verification.S
 
   val of_transaction :
-       ?preeval:bool
-    -> sok_digest:Sok_message.Digest.t
+       sok_digest:Sok_message.Digest.t
     -> source:Frozen_ledger_hash.t
     -> target:Frozen_ledger_hash.t
     -> pending_coinbase_stack_state:Pending_coinbase_stack_state.t
@@ -1114,7 +1116,7 @@ module type S = sig
   val merge : t -> t -> sok_digest:Sok_message.Digest.t -> t Or_error.t
 end
 
-let check_transaction_union ?(preeval = false) sok_message source target
+let check_transaction_union sok_message source target
     pending_coinbase_stack_state transaction handler =
   let sok_digest = Sok_message.digest sok_message in
   let prover_state : Base.Prover_state.t =
@@ -1131,17 +1133,18 @@ let check_transaction_union ?(preeval = false) sok_message source target
       ~supply_increase:(Transaction_union.supply_increase transaction)
   in
   let open Tick in
-  let main = if preeval then Lazy.force Base.reduced_main else Base.main in
   let main =
     handle
-      (Checked.map (main (Field.Var.constant top_hash)) ~f:As_prover.return)
+      (Checked.map
+         (Base.main (Field.Var.constant top_hash))
+         ~f:As_prover.return)
       handler
   in
   Or_error.ok_exn (run_and_check main prover_state) |> ignore
 
-let check_transaction ?preeval ~sok_message ~source ~target
+let check_transaction ~sok_message ~source ~target
     ~pending_coinbase_stack_state (t : Transaction.t) handler =
-  check_transaction_union ?preeval sok_message source target
+  check_transaction_union sok_message source target
     pending_coinbase_stack_state
     (Transaction_union.of_transaction t)
     handler
@@ -1154,8 +1157,8 @@ let check_user_command ~sok_message ~source ~target pending_coinbase_stack t
         {source= pending_coinbase_stack; target= pending_coinbase_stack}
     (User_command t) handler
 
-let generate_transaction_union_witness ?(preeval = false) sok_message source
-    target transaction pending_coinbase_stack_state handler =
+let generate_transaction_union_witness sok_message source target transaction
+    pending_coinbase_stack_state handler =
   let sok_digest = Sok_message.digest sok_message in
   let prover_state : Base.Prover_state.t =
     { state1= source
@@ -1171,13 +1174,12 @@ let generate_transaction_union_witness ?(preeval = false) sok_message source
       ~pending_coinbase_stack_state
   in
   let open Tick.Groth16 in
-  let main = if preeval then Lazy.force Base.reduced_main else Base.main in
-  let main x = handle (main x) handler in
+  let main x = handle (Base.main x) handler in
   generate_auxiliary_input (tick_input ()) prover_state main top_hash
 
-let generate_transaction_witness ?preeval ~sok_message ~source ~target
+let generate_transaction_witness ~sok_message ~source ~target
     pending_coinbase_stack_state (t : Transaction.t) handler =
-  generate_transaction_union_witness ?preeval sok_message source target
+  generate_transaction_union_witness sok_message source target
     (Transaction_union.of_transaction t)
     pending_coinbase_stack_state handler
 
@@ -1201,7 +1203,7 @@ struct
 
   let wrap proof_type proof input =
     let prover_state = {Wrap.Prover_state.proof; proof_type} in
-    Tock.prove keys.proving.wrap wrap_input prover_state Wrap.main
+    Wrap.prove_main keys.proving.wrap prover_state
       (Wrap_input.of_tick_field input)
 
   let merge_proof sok_digest ledger_hash1 ledger_hash2 ledger_hash3
@@ -1241,16 +1243,13 @@ struct
       ; transition23
       ; tock_vk= keys.verification.wrap }
     in
-    ( top_hash
-    , Tick.Groth16.prove keys.proving.merge (tick_input ()) prover_state
-        Merge.main top_hash )
+    (top_hash, Merge.prove_main keys.proving.merge prover_state top_hash)
 
-  let of_transaction_union ?preeval sok_digest source target
+  let of_transaction_union sok_digest source target
       ~pending_coinbase_stack_state transaction handler =
     let top_hash, proof =
-      Base.transaction_union_proof ?preeval sok_digest
-        ~proving_key:keys.proving.base source target
-        pending_coinbase_stack_state transaction handler
+      Base.transaction_union_proof sok_digest ~proving_key:keys.proving.base
+        source target pending_coinbase_stack_state transaction handler
     in
     { source
     ; sok_digest
@@ -1261,10 +1260,9 @@ struct
     ; supply_increase= Transaction_union.supply_increase transaction
     ; proof= wrap `Base proof top_hash }
 
-  let of_transaction ?preeval ~sok_digest ~source ~target
-      ~pending_coinbase_stack_state transition handler =
-    of_transaction_union ?preeval sok_digest source target
-      ~pending_coinbase_stack_state
+  let of_transaction ~sok_digest ~source ~target ~pending_coinbase_stack_state
+      transition handler =
+    of_transaction_union sok_digest source target ~pending_coinbase_stack_state
       (Transaction_union.of_transaction transition)
       handler
 
