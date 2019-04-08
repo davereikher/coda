@@ -508,7 +508,7 @@ module Base = struct
     in
     ()
 
-  let prove_main = Groth16.reduce_to_prover (tick_input ()) main
+  let prove_main = lazy (Groth16.reduce_to_prover (tick_input ()) main)
 
   let create_keys () = Groth16.generate_keypair main ~exposing:(tick_input ())
 
@@ -810,7 +810,7 @@ module Merge = struct
     in
     Boolean.Assert.all [verify_12; verify_23]
 
-  let prove_main = Groth16.reduce_to_prover (input ()) main
+  let prove_main = lazy (Groth16.reduce_to_prover (input ()) main)
 
   let create_keys () = Groth16.generate_keypair ~exposing:(input ()) main
 
@@ -1060,7 +1060,7 @@ struct
     in
     with_label __LOC__ (Boolean.Assert.is_true result)
 
-  let prove_main = reduce_to_prover wrap_input main
+  let prove_main = lazy (reduce_to_prover wrap_input main)
 
   let create_keys () = generate_keypair ~exposing:wrap_input main
 
@@ -1203,7 +1203,8 @@ struct
 
   let wrap proof_type proof input =
     let prover_state = {Wrap.Prover_state.proof; proof_type} in
-    Wrap.prove_main keys.proving.wrap prover_state
+    (Lazy.force Wrap.prove_main)
+      keys.proving.wrap prover_state
       (Wrap_input.of_tick_field input)
 
   let merge_proof sok_digest ledger_hash1 ledger_hash2 ledger_hash3
@@ -1243,7 +1244,8 @@ struct
       ; transition23
       ; tock_vk= keys.verification.wrap }
     in
-    (top_hash, Merge.prove_main keys.proving.merge prover_state top_hash)
+    ( top_hash
+    , (Lazy.force Merge.prove_main) keys.proving.merge prover_state top_hash )
 
   let of_transaction_union sok_digest source target
       ~pending_coinbase_stack_state transaction handler =

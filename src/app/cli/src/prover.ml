@@ -73,7 +73,7 @@ module Worker_state = struct
 
                let wrap hash proof =
                  let module Wrap = Keys.Wrap in
-                 Wrap.prove_main
+                 (Lazy.force Wrap.prove_main)
                    (Tock.Keypair.pk Wrap.keys)
                    {Wrap.Prover_state.proof}
                    (Wrap_input.of_tick_field hash)
@@ -92,7 +92,7 @@ module Worker_state = struct
                    ; update= block }
                  in
                  let prev_proof =
-                   Keys.Step.prove_main
+                   (Lazy.force Keys.Step.prove_main)
                      (Tick.Groth16.Keypair.pk Keys.Step.keys)
                      prover_state
                      ~handlers:

@@ -39,11 +39,12 @@ module type S = sig
     val main : Tick.Field.Var.t -> (unit, Prover_state.t) Tick.Checked.t
 
     val prove_main :
-         Tick.Proving_key.t
-      -> ?handlers:Tick.Handler.t list
-      -> Prover_state.t
-      -> Tick.Field.t
-      -> Tick.Proof.t
+      (   Tick.Proving_key.t
+       -> ?handlers:Tick.Handler.t list
+       -> Prover_state.t
+       -> Tick.Field.t
+       -> Tick.Proof.t)
+      Lazy.t
   end
 
   module Wrap : sig
@@ -57,11 +58,12 @@ module type S = sig
     val main : Wrap_input.var -> (unit, Prover_state.t) Tock.Checked.t
 
     val prove_main :
-         Tock.Proving_key.t
-      -> ?handlers:Tock.Handler.t list
-      -> Prover_state.t
-      -> Wrap_input.t
-      -> Tock.Proof.t
+      (   Tock.Proving_key.t
+       -> ?handlers:Tock.Handler.t list
+       -> Prover_state.t
+       -> Wrap_input.t
+       -> Tock.Proof.t)
+      Lazy.t
   end
 end
 
@@ -152,7 +154,7 @@ let create () : (module S) Async.Deferred.t =
               As_prover.(map (get_state ()) ~f:there)
               (main x)
 
-          let prove_main = Tick.Groth16.reduce_to_prover (input ()) main
+          let prove_main = lazy (Tick.Groth16.reduce_to_prover (input ()) main)
         end
 
         module Wrap = struct
@@ -171,7 +173,7 @@ let create () : (module S) Async.Deferred.t =
               As_prover.(map (get_state ()) ~f:there)
               (main x)
 
-          let prove_main = Tock.reduce_to_prover input main
+          let prove_main = lazy (Tock.reduce_to_prover input main)
         end
       end in
       (module M : S)
