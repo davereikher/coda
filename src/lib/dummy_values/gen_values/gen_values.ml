@@ -27,7 +27,7 @@ module Make
     end) =
 struct
   open M
-  module Impl = Snarky.Snark.Make_noast (B)
+  module Impl = Snarky.Snark.Make_reduce_to_prover (B)
 
   let proof_string =
     let open Impl in
