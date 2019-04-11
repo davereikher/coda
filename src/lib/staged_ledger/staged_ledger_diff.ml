@@ -104,7 +104,7 @@ end) :
       module T = struct
         type t =
           { diff: diff
-          ; prev_hash: Staged_ledger_hash.t
+          ; prev_hash: Staged_ledger_hash.Stable.V1.t
           ; creator: Compressed_public_key.Stable.V1.t }
         [@@deriving sexp, bin_io, version {asserted}]
       end
@@ -127,8 +127,8 @@ end) :
 
   type t = Stable.Latest.t =
     { diff: diff
-    ; prev_hash: Staged_ledger_hash.t
-    ; creator: Compressed_public_key.t }
+    ; prev_hash: Staged_ledger_hash.Stable.V1.t
+    ; creator: Compressed_public_key.Stable.V1.t }
   [@@deriving sexp]
 
   module With_valid_signatures_and_proofs = struct

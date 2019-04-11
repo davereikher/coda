@@ -222,7 +222,15 @@ module type Staged_ledger_aux_hash_intf = sig
 end
 
 module type Staged_ledger_hash_intf = sig
-  type t [@@deriving bin_io, sexp, eq, compare]
+  type t [@@deriving sexp, eq, compare]
+
+  module Stable :
+    sig
+      module V1 : sig
+        type t [@@deriving bin_io, sexp, eq, compare, version]
+      end
+    end
+    with type V1.t = t
 
   type ledger_hash
 

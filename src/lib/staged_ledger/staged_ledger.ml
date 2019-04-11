@@ -2195,7 +2195,22 @@ let%test_module "test" =
       end
 
       module Staged_ledger_hash = struct
-        include String
+        module Stable = struct
+          module V1 = struct
+            module T = struct
+              type t = string
+              [@@deriving bin_io, sexp, hash, compare, eq, yojson, version]
+            end
+
+            include T
+          end
+
+          module Latest = V1
+        end
+
+        type t = string [@@deriving sexp, eq, compare]
+
+        include Hashable.Make_binable (Stable.Latest)
 
         type ledger_hash = Ledger_hash.t
 
@@ -2302,7 +2317,7 @@ let%test_module "test" =
         type public_key = Compressed_public_key.Stable.V1.t
         [@@deriving sexp, bin_io, compare, yojson]
 
-        type staged_ledger_hash = Staged_ledger_hash.t
+        type staged_ledger_hash = Staged_ledger_hash.Stable.V1.t
         [@@deriving sexp, bin_io, compare, yojson]
 
         module At_most_two = struct
